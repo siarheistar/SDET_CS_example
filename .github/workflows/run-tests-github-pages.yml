@@ -131,25 +131,16 @@ jobs:
           echo "✅ Report generated"
 
       # =====================================================
-      # STEP 9: Add Index Redirect
+      # STEP 9: Verify Allure Report
       # =====================================================
-      - name: Create index.html redirect
+      - name: Verify Allure report files
         if: always()
         run: |
-          cat > allure-report/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <title>Allure Report - SDET Framework</title>
-            <meta http-equiv="refresh" content="0; url=./latest/index.html">
-          </head>
-          <body>
-            <p>Redirecting to latest report...</p>
-            <p>If not redirected, <a href="./latest/index.html">click here</a>.</p>
-          </body>
-          </html>
-          EOF
+          echo "Checking generated Allure report files:"
+          ls -la allure-report/ | head -20
+          echo ""
+          echo "Total files:"
+          find allure-report -type f | wc -l
 
       # =====================================================
       # STEP 10: Deploy to GitHub Pages
