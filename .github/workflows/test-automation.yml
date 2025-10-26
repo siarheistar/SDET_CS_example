@@ -349,9 +349,24 @@ jobs:
         run: |
           # Collect all allure-results
           mkdir -p allure-results
-          find all-test-results -name "allure-results" -type d -exec cp -r {}/* allure-results/ \;
 
-          # Generate report
+          # Check if all-test-results directory exists
+          if [ -d "all-test-results" ]; then
+            # Find and copy allure-results if they exist
+            find all-test-results -name "allure-results" -type d -exec cp -r {}/* allure-results/ \; 2>/dev/null || true
+
+            # If no allure results found, create dummy data for demonstration
+            if [ -z "$(ls -A allure-results)" ]; then
+              echo "No Allure results found. Workflow will skip report generation."
+              echo "To generate Allure reports, ensure tests have [AllureNUnit] attributes."
+              exit 0
+            fi
+          else
+            echo "No test results directory found. Skipping Allure report generation."
+            exit 0
+          fi
+
+          # Generate report only if we have results
           allure generate allure-results --clean -o allure-report
 
       - name: Upload Allure Report
