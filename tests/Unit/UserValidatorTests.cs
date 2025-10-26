@@ -87,6 +87,18 @@ public class UserValidatorTests
 
     private bool IsValidEmail(string email)
     {
-        return !string.IsNullOrEmpty(email) && email.Contains("@") && email.Contains(".");
+        if (string.IsNullOrEmpty(email))
+            return false;
+
+        var atIndex = email.IndexOf("@");
+        var dotIndex = email.LastIndexOf(".");
+
+        // Must have @ and . in correct positions
+        // @ must not be first or last character
+        // . must come after @ and not be the last character
+        return atIndex > 0
+            && atIndex < email.Length - 1
+            && dotIndex > atIndex
+            && dotIndex < email.Length - 1;
     }
 }
