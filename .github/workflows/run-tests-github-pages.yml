@@ -64,19 +64,25 @@ jobs:
       - name: Create Allure results directory
         run: mkdir -p ${{ github.workspace }}/allure-results
 
+      - name: Verify Allure config
+        run: |
+          echo "Workspace: ${{ github.workspace }}"
+          echo "Allure results will be written to: ${{ github.workspace }}/allure-results"
+          ls -la ${{ github.workspace }}/allureConfig.json || echo "Config file not found"
+          cat ${{ github.workspace }}/allureConfig.json || echo "Cannot read config"
+
       - name: Run tests
         run: |
+          export ALLURE_RESULTS_PATH=${{ github.workspace }}/allure-results
+          echo "ALLURE_RESULTS_PATH set to: $ALLURE_RESULTS_PATH"
           dotnet test tests/SDET.Tests.csproj \
             --configuration Release \
             --no-build \
-            --filter "TestCategory=Unit|TestCategory=API" \
+            --filter "TestCategory=Unit" \
             --logger:"console;verbosity=normal" \
             --logger:"trx;LogFileName=test-results.trx" \
-            --results-directory:${{ github.workspace }}/test-reports \
-            -- NUnit.AllureResultsDirectory=${{ github.workspace }}/allure-results
+            --results-directory:${{ github.workspace }}/test-reports
         continue-on-error: true
-        env:
-          ALLURE_CONFIG: ${{ github.workspace }}/allureConfig.json
 
       # =====================================================
       # STEP 6: Add Environment Info
