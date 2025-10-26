@@ -98,7 +98,7 @@ After running tests, check:
 
 ## Current Test Status
 
-✅ **Unit Tests**: 11/11 passing
+✅ **Unit Tests**: 11/11 passing (works immediately after clone!)
 ⚠️ **API Tests**: Requires API server (disabled by default)
 ⚠️ **UI Tests**: Requires Playwright (disabled by default)
 ⚠️ **BDD Tests**: Requires UI/API setup (disabled by default)
