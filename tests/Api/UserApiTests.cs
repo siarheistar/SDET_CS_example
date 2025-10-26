@@ -13,6 +13,7 @@ namespace SDET.Tests.Api;
 [TestFixture]
 [Category("API")]
 [Category("Smoke")]
+[Explicit("Requires API server running. Use --filter 'TestCategory=API' to run.")]
 public class UserApiTests : BaseAPITest
 {
     private TestDataFactory _testDataFactory = null!;

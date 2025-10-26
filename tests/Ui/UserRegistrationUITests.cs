@@ -13,6 +13,7 @@ namespace SDET.Tests.Ui;
 [TestFixture]
 [Category("UI")]
 [Category("Smoke")]
+[Explicit("Requires Playwright browser setup. Use --filter 'TestCategory=UI' to run.")]
 public class UserRegistrationUITests : BaseUITest
 {
     private TestDataFactory _testDataFactory = null!;
