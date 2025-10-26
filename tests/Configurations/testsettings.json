@@ -1,0 +1,65 @@
+{
+  "BaseUrl": "http://localhost:5001",
+  "ApiBaseUrl": "http://localhost:5001/api",
+  "Browser": {
+    "Type": "chromium",
+    "Headless": true,
+    "SlowMo": 0,
+    "Timeout": 30000,
+    "RecordVideo": false,
+    "Screenshots": {
+      "OnFailure": true,
+      "FullPage": true
+    }
+  },
+  "Timeouts": {
+    "Default": 30000,
+    "PageLoad": 60000,
+    "ApiRequest": 30000,
+    "ElementWait": 5000
+  },
+  "Allure": {
+    "ResultsDirectory": "allure-results",
+    "ReportDirectory": "allure-report",
+    "IncludeStackTrace": true,
+    "IncludeScreenshots": true
+  },
+  "Logging": {
+    "LogLevel": "Information",
+    "LogFile": "logs/test-execution-.log",
+    "ConsoleOutput": true,
+    "IncludeTimestamp": true
+  },
+  "TestData": {
+    "DataDirectory": "TestData",
+    "UseFaker": true,
+    "SeedValue": null
+  },
+  "Environments": {
+    "Local": {
+      "BaseUrl": "http://localhost:5001",
+      "Database": "Server=localhost;Database=TestDB;",
+      "EnableDebugLogging": true
+    },
+    "CI": {
+      "BaseUrl": "http://test-app:5001",
+      "Database": "Server=db;Database=TestDB;",
+      "EnableDebugLogging": false
+    },
+    "Staging": {
+      "BaseUrl": "https://staging.example.com",
+      "Database": "Server=staging-db;Database=TestDB;",
+      "EnableDebugLogging": false
+    }
+  },
+  "Parallel": {
+    "Enabled": true,
+    "MaxDegreeOfParallelism": 4,
+    "TestScope": "Method"
+  },
+  "Retry": {
+    "Enabled": true,
+    "MaxAttempts": 2,
+    "DelayBetweenAttempts": 1000
+  }
+}

@@ -1,0 +1,31 @@
+# Build outputs
+**/bin/
+**/obj/
+
+# VS Code
+.vscode/
+
+# Test results
+**/*.trx
+**/TestResults/
+**/test-reports/
+**/allure-results/
+**/allure-report/
+
+# Logs
+**/logs/
+**/*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+*.md
+!NuGet.config

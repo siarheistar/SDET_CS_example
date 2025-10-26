@@ -1,0 +1,195 @@
+name: Run Tests with GitHub Pages Report
+
+# This workflow generates Allure reports and publishes them to GitHub Pages
+# Best for: Public repositories, no server maintenance needed
+# Access reports at: https://USERNAME.github.io/REPO-NAME/
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+env:
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  test-and-report:
+    name: Run Tests and Publish Report
+    runs-on: ubuntu-latest
+
+    steps:
+      # =====================================================
+      # STEP 1: Checkout Code
+      # =====================================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # =====================================================
+      # STEP 2: Setup .NET
+      # =====================================================
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # =====================================================
+      # STEP 3: Install Allure CLI
+      # =====================================================
+      - name: Install Allure CLI
+        run: |
+          sudo wget https://github.com/allure-framework/allure2/releases/download/2.25.0/allure-2.25.0.tgz
+          sudo tar -zxvf allure-2.25.0.tgz -C /opt/
+          sudo ln -s /opt/allure-2.25.0/bin/allure /usr/bin/allure
+          allure --version
+
+      # =====================================================
+      # STEP 4: Restore and Build
+      # =====================================================
+      - name: Restore dependencies
+        run: |
+          dotnet nuget locals all --clear
+          dotnet restore SDET_CS_Framework.sln --configfile NuGet.config
+
+      - name: Build solution
+        run: dotnet build SDET_CS_Framework.sln -c Release --no-restore
+
+      # =====================================================
+      # STEP 5: Run Tests
+      # =====================================================
+      - name: Create Allure results directory
+        run: mkdir -p ${{ github.workspace }}/allure-results
+
+      - name: Run tests
+        run: |
+          dotnet test tests/SDET.Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --filter "TestCategory=Unit|TestCategory=API" \
+            --logger:"console;verbosity=normal" \
+            --logger:"trx;LogFileName=test-results.trx" \
+            --results-directory:${{ github.workspace }}/test-reports \
+            -- NUnit.AllureResultsDirectory=${{ github.workspace }}/allure-results
+        continue-on-error: true
+        env:
+          ALLURE_CONFIG: ${{ github.workspace }}/allureConfig.json
+
+      # =====================================================
+      # STEP 6: Add Environment Info
+      # =====================================================
+      - name: Add Allure environment info
+        if: always()
+        run: |
+          cat > ${{ github.workspace }}/allure-results/environment.properties << EOF
+          Build.Number=${{ github.run_number }}
+          Branch=${{ github.ref_name }}
+          Commit=${{ github.sha }}
+          Author=${{ github.actor }}
+          Workflow=${{ github.workflow }}
+          Repository=${{ github.repository }}
+          EOF
+
+      # =====================================================
+      # STEP 7: Get Previous Report History (For Trends)
+      # =====================================================
+      - name: Get Allure history
+        uses: actions/checkout@v4
+        if: always()
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Copy history to results
+        if: always()
+        continue-on-error: true
+        run: |
+          if [ -d "gh-pages/history" ]; then
+            cp -r gh-pages/history ${{ github.workspace }}/allure-results/
+            echo "✅ Copied history from previous reports"
+          else
+            echo "⚠️ No history found (first run)"
+          fi
+
+      # =====================================================
+      # STEP 8: Generate Allure Report
+      # =====================================================
+      - name: Generate Allure report
+        if: always()
+        run: |
+          allure generate --clean ${{ github.workspace }}/allure-results -o allure-report
+          echo "✅ Report generated"
+
+      # =====================================================
+      # STEP 9: Add Index Redirect
+      # =====================================================
+      - name: Create index.html redirect
+        if: always()
+        run: |
+          cat > allure-report/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Allure Report - SDET Framework</title>
+            <meta http-equiv="refresh" content="0; url=./latest/index.html">
+          </head>
+          <body>
+            <p>Redirecting to latest report...</p>
+            <p>If not redirected, <a href="./latest/index.html">click here</a>.</p>
+          </body>
+          </html>
+          EOF
+
+      # =====================================================
+      # STEP 10: Deploy to GitHub Pages
+      # =====================================================
+      - name: Deploy to GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./allure-report
+          destination_dir: ./
+          keep_files: false
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+
+      # =====================================================
+      # STEP 11: Create Summary
+      # =====================================================
+      - name: Create job summary
+        if: always()
+        run: |
+          PAGES_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+
+          echo "## 🧪 Test Execution Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Build Number** | #${{ github.run_number }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 [**View Allure Report on GitHub Pages**]($PAGES_URL)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> 📝 Note: It may take 1-2 minutes for GitHub Pages to update" >> $GITHUB_STEP_SUMMARY
+
+      # =====================================================
+      # STEP 12: Upload Artifacts (Backup)
+      # =====================================================
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_number }}
+          path: |
+            ${{ github.workspace }}/test-reports/
+            ${{ github.workspace }}/allure-results/
+          retention-days: 30

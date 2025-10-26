@@ -1,0 +1,401 @@
+name: Test Automation CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, feature/* ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run daily regression tests at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Test suite to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - smoke
+          - unit
+          - api
+          - ui
+          - bdd
+          - integration
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  CONFIGURATION: Release
+  ALLURE_VERSION: 2.25.0
+
+jobs:
+  # ==================== Code Quality Job ====================
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build solution
+        run: dotnet build --configuration ${{ env.CONFIGURATION }} --no-restore
+
+      - name: Run code analysis
+        run: dotnet format --verify-no-changes --no-restore
+
+  # ==================== Unit Tests Job ====================
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build solution
+        run: dotnet build --configuration ${{ env.CONFIGURATION }} --no-restore
+
+      - name: Run Unit Tests
+        run: |
+          dotnet test \
+            --configuration ${{ env.CONFIGURATION }} \
+            --no-build \
+            --filter "TestCategory=Unit" \
+            --logger "trx;LogFileName=unit-test-results.trx" \
+            --logger "console;verbosity=detailed" \
+            --results-directory ./test-reports \
+            --collect:"XPlat Code Coverage" \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: test-reports/
+
+      - name: Upload Coverage Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-coverage
+          path: test-reports/**/coverage.opencover.xml
+
+  # ==================== API Tests Job ====================
+  api-tests:
+    name: API Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build solution
+        run: dotnet build --configuration ${{ env.CONFIGURATION }} --no-restore
+
+      - name: Start Application (if needed)
+        run: |
+          # Start application in background if it's not a separate service
+          # dotnet run --project src/Application/SDET.Application.csproj &
+          # sleep 10
+          echo "Application would be started here"
+
+      - name: Run API Tests
+        run: |
+          dotnet test \
+            --configuration ${{ env.CONFIGURATION }} \
+            --no-build \
+            --filter "TestCategory=API" \
+            --logger "trx;LogFileName=api-test-results.trx" \
+            --logger "console;verbosity=detailed" \
+            --results-directory ./test-reports \
+            --collect:"XPlat Code Coverage"
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-results
+          path: test-reports/
+
+  # ==================== UI Tests Job ====================
+  ui-tests:
+    name: UI Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build solution
+        run: dotnet build --configuration ${{ env.CONFIGURATION }} --no-restore
+
+      - name: Install Playwright Browsers
+        run: |
+          cd tests
+          pwsh bin/${{ env.CONFIGURATION }}/net8.0/playwright.ps1 install --with-deps chromium firefox webkit
+
+      - name: Run UI Tests
+        run: |
+          dotnet test \
+            --configuration ${{ env.CONFIGURATION }} \
+            --no-build \
+            --filter "TestCategory=UI" \
+            --logger "trx;LogFileName=ui-test-results.trx" \
+            --logger "console;verbosity=detailed" \
+            --results-directory ./test-reports \
+            --collect:"XPlat Code Coverage"
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-results
+          path: test-reports/
+
+      - name: Upload Screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-screenshots
+          path: screenshots/
+
+  # ==================== BDD Tests Job ====================
+  bdd-tests:
+    name: BDD/SpecFlow Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build solution
+        run: dotnet build --configuration ${{ env.CONFIGURATION }} --no-restore
+
+      - name: Install Playwright Browsers
+        run: |
+          cd tests
+          pwsh bin/${{ env.CONFIGURATION }}/net8.0/playwright.ps1 install --with-deps chromium
+
+      - name: Run BDD Tests
+        run: |
+          dotnet test \
+            --configuration ${{ env.CONFIGURATION }} \
+            --no-build \
+            --filter "TestCategory=BDD" \
+            --logger "trx;LogFileName=bdd-test-results.trx" \
+            --logger "console;verbosity=detailed" \
+            --results-directory ./test-reports
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bdd-test-results
+          path: test-reports/
+
+  # ==================== Postman/Newman Tests Job ====================
+  postman-tests:
+    name: Postman API Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Newman
+        run: npm install -g newman newman-reporter-htmlextra newman-reporter-allure
+
+      - name: Start Application
+        run: |
+          # Start application in background
+          # docker-compose up -d
+          echo "Application would be started here"
+
+      - name: Run Postman Collection
+        run: |
+          newman run postman/collections/SDET_API_Tests.postman_collection.json \
+            --environment postman/environments/local.postman_environment.json \
+            --reporters cli,htmlextra,allure \
+            --reporter-htmlextra-export postman-reports/report.html \
+            --reporter-allure-export allure-results
+
+      - name: Upload Postman Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postman-test-results
+          path: postman-reports/
+
+  # ==================== Smoke Tests Job ====================
+  smoke-tests:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+    if: github.event_name == 'pull_request' || github.event.inputs.test_suite == 'smoke'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build solution
+        run: dotnet build --configuration ${{ env.CONFIGURATION }} --no-restore
+
+      - name: Install Playwright
+        run: |
+          cd tests
+          pwsh bin/${{ env.CONFIGURATION }}/net8.0/playwright.ps1 install --with-deps chromium
+
+      - name: Run Smoke Tests
+        run: |
+          dotnet test \
+            --configuration ${{ env.CONFIGURATION }} \
+            --no-build \
+            --filter "TestCategory=Smoke" \
+            --logger "trx;LogFileName=smoke-test-results.trx" \
+            --logger "console;verbosity=detailed" \
+            --results-directory ./test-reports
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-results
+          path: test-reports/
+
+  # ==================== Allure Report Job ====================
+  allure-report:
+    name: Generate Allure Report
+    runs-on: ubuntu-latest
+    needs: [unit-tests, api-tests, ui-tests, bdd-tests, postman-tests]
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download All Test Results
+        uses: actions/download-artifact@v4
+        with:
+          path: all-test-results
+
+      - name: Install Allure
+        run: |
+          wget https://github.com/allure-framework/allure2/releases/download/${{ env.ALLURE_VERSION }}/allure-${{ env.ALLURE_VERSION }}.tgz
+          tar -zxvf allure-${{ env.ALLURE_VERSION }}.tgz -C /opt/
+          sudo ln -s /opt/allure-${{ env.ALLURE_VERSION }}/bin/allure /usr/bin/allure
+
+      - name: Generate Allure Report
+        run: |
+          # Collect all allure-results
+          mkdir -p allure-results
+          find all-test-results -name "allure-results" -type d -exec cp -r {}/* allure-results/ \;
+
+          # Generate report
+          allure generate allure-results --clean -o allure-report
+
+      - name: Upload Allure Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report/
+
+      - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./allure-report
+          publish_branch: gh-pages
+
+  # ==================== Test Summary Job ====================
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [unit-tests, api-tests, ui-tests, bdd-tests, postman-tests, smoke-tests]
+    if: always()
+
+    steps:
+      - name: Download All Test Results
+        uses: actions/download-artifact@v4
+        with:
+          path: all-test-results
+
+      - name: Generate Test Summary
+        run: |
+          echo "# Test Execution Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Suite | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Unit Tests | ${{ needs.unit-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| API Tests | ${{ needs.api-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| UI Tests | ${{ needs.ui-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| BDD Tests | ${{ needs.bdd-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Postman Tests | ${{ needs.postman-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Smoke Tests | ${{ needs.smoke-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow:** ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Run Number:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered By:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY

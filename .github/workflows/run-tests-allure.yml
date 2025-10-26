@@ -1,0 +1,299 @@
+name: Run Tests with Allure Report
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+    inputs:
+      test_filter:
+        description: 'Test filter (e.g., TestCategory=Unit)'
+        required: false
+        default: ''
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  ALLURE_SERVER_URL: ${{ secrets.ALLURE_SERVER_URL }}  # e.g., http://your-vm-ip:5050
+  ALLURE_PROJECT_ID: 'sdet-cs-framework'
+
+jobs:
+  test:
+    name: Run Tests and Generate Allure Report
+    runs-on: ubuntu-latest
+
+    steps:
+      # =====================================================
+      # STEP 1: Checkout Code
+      # =====================================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better reporting
+
+      # =====================================================
+      # STEP 2: Setup .NET
+      # =====================================================
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # =====================================================
+      # STEP 3: Restore Dependencies
+      # =====================================================
+      - name: Restore dependencies
+        run: |
+          dotnet nuget locals all --clear
+          dotnet restore SDET_CS_Framework.sln --configfile NuGet.config
+
+      # =====================================================
+      # STEP 4: Build Solution
+      # =====================================================
+      - name: Build solution
+        run: dotnet build SDET_CS_Framework.sln -c Release --no-restore
+
+      # =====================================================
+      # STEP 5: Prepare Allure Results Directory
+      # =====================================================
+      - name: Create Allure results directory
+        run: mkdir -p ${{ github.workspace }}/allure-results
+
+      # =====================================================
+      # STEP 6: Run Tests
+      # =====================================================
+      - name: Run tests
+        run: |
+          TEST_FILTER="${{ github.event.inputs.test_filter }}"
+
+          if [ -z "$TEST_FILTER" ]; then
+            # Run Unit and API tests by default (exclude UI tests in CI)
+            TEST_FILTER="TestCategory=Unit|TestCategory=API"
+          fi
+
+          dotnet test tests/SDET.Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --filter "$TEST_FILTER" \
+            --logger:"console;verbosity=normal" \
+            --logger:"trx;LogFileName=test-results.trx" \
+            --results-directory:${{ github.workspace }}/test-reports \
+            -- NUnit.AllureResultsDirectory=${{ github.workspace }}/allure-results
+        continue-on-error: true  # Continue even if tests fail
+        env:
+          ALLURE_CONFIG: ${{ github.workspace }}/allureConfig.json
+
+      # =====================================================
+      # STEP 7: Add Allure Environment Info
+      # =====================================================
+      - name: Add Allure environment information
+        if: always()
+        run: |
+          cat > ${{ github.workspace }}/allure-results/environment.properties << EOF
+          Browser=N/A
+          Stand=CI
+          ApiUrl=http://localhost:5001
+          Framework=NUnit
+          Language=C#
+          DotNetVersion=${{ env.DOTNET_VERSION }}
+          BuildNumber=${{ github.run_number }}
+          Branch=${{ github.ref_name }}
+          Commit=${{ github.sha }}
+          Author=${{ github.actor }}
+          Workflow=${{ github.workflow }}
+          RunId=${{ github.run_id }}
+          Repository=${{ github.repository }}
+          EOF
+
+      # =====================================================
+      # STEP 8: Add Allure Executor Info
+      # =====================================================
+      - name: Add Allure executor information
+        if: always()
+        run: |
+          cat > ${{ github.workspace }}/allure-results/executor.json << EOF
+          {
+            "name": "GitHub Actions",
+            "type": "github",
+            "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "buildOrder": ${{ github.run_number }},
+            "buildName": "Run #${{ github.run_number }}",
+            "buildUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "reportUrl": "${{ env.ALLURE_SERVER_URL }}/allure-docker-service/projects/${{ env.ALLURE_PROJECT_ID }}/reports/latest/index.html",
+            "reportName": "Allure Report"
+          }
+          EOF
+
+      # =====================================================
+      # STEP 9: Upload Results to Allure Server
+      # =====================================================
+      - name: Upload results to Allure Server
+        if: always()
+        run: |
+          ALLURE_SERVER="${{ env.ALLURE_SERVER_URL }}"
+          PROJECT_ID="${{ env.ALLURE_PROJECT_ID }}"
+
+          echo "📊 Uploading Allure results to server..."
+          echo "Server: $ALLURE_SERVER"
+          echo "Project: $PROJECT_ID"
+
+          # Create project if it doesn't exist (will fail silently if exists)
+          curl -X POST "$ALLURE_SERVER/allure-docker-service/projects" \
+            -H "Content-Type: application/json" \
+            -d "{\"id\": \"$PROJECT_ID\"}" \
+            --silent --show-error || true
+
+          # Clean previous results for this execution
+          echo "🧹 Cleaning previous results..."
+          curl -X GET "$ALLURE_SERVER/allure-docker-service/clean-results?project_id=$PROJECT_ID" \
+            --silent --show-error
+
+          # Upload all result files
+          echo "📤 Uploading result files..."
+          cd ${{ github.workspace }}/allure-results
+
+          UPLOAD_COUNT=0
+          for file in *.json *.properties; do
+            if [ -f "$file" ]; then
+              echo "  Uploading: $file"
+              curl -X POST "$ALLURE_SERVER/allure-docker-service/send-results?project_id=$PROJECT_ID" \
+                -H "Content-Type: multipart/form-data" \
+                -F "files[]=@$file" \
+                --silent --show-error
+              UPLOAD_COUNT=$((UPLOAD_COUNT + 1))
+            fi
+          done
+
+          echo "✅ Uploaded $UPLOAD_COUNT files"
+
+          # Generate report
+          echo "📈 Generating Allure report..."
+          EXECUTION_NAME="Build #${{ github.run_number }}"
+          EXECUTION_FROM="${{ github.ref_name }}"
+          EXECUTION_TYPE="${{ github.event_name }}"
+
+          REPORT_RESPONSE=$(curl -X GET "$ALLURE_SERVER/allure-docker-service/generate-report?project_id=$PROJECT_ID&execution_name=$EXECUTION_NAME&execution_from=$EXECUTION_FROM&execution_type=$EXECUTION_TYPE" \
+            --silent --show-error)
+
+          echo "$REPORT_RESPONSE"
+
+          # Extract report URL
+          REPORT_URL="$ALLURE_SERVER/allure-docker-service/projects/$PROJECT_ID/reports/latest/index.html"
+          echo "🎉 Report available at: $REPORT_URL"
+
+          # Save URL to output
+          echo "ALLURE_REPORT_URL=$REPORT_URL" >> $GITHUB_ENV
+
+      # =====================================================
+      # STEP 10: Comment Report URL on PR
+      # =====================================================
+      - name: Comment Allure Report URL on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const reportUrl = process.env.ALLURE_REPORT_URL || 'Report generation in progress...';
+            const comment = `## 📊 Allure Test Report
+
+            🔗 **[View Full Allure Report](${reportUrl})**
+
+            - **Build:** #${{ github.run_number }}
+            - **Branch:** \`${{ github.ref_name }}\`
+            - **Commit:** \`${{ github.sha }}\`
+            - **Triggered by:** @${{ github.actor }}
+
+            > This report is automatically updated on each push.`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      # =====================================================
+      # STEP 11: Upload Test Results as Artifacts (Backup)
+      # =====================================================
+      - name: Upload test results as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_number }}
+          path: |
+            ${{ github.workspace }}/test-reports/
+            ${{ github.workspace }}/allure-results/
+          retention-days: 30
+
+      # =====================================================
+      # STEP 12: Publish Test Results Summary
+      # =====================================================
+      - name: Publish test results summary
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Test Results
+          path: ${{ github.workspace }}/test-reports/*.trx
+          reporter: dotnet-trx
+          fail-on-error: false
+
+      # =====================================================
+      # STEP 13: Job Summary
+      # =====================================================
+      - name: Create job summary
+        if: always()
+        run: |
+          echo "## 🧪 Test Execution Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Build Number** | #${{ github.run_number }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Triggered By** | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Workflow** | ${{ github.workflow }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Reports" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 [**View Allure Report**](${{ env.ALLURE_REPORT_URL }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "_Report generated on $(date)_" >> $GITHUB_STEP_SUMMARY
+
+  # =====================================================
+  # JOB 2: Notification (Optional)
+  # =====================================================
+  notify:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+
+    steps:
+      - name: Send Slack notification
+        if: env.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          STATUS="${{ needs.test.result }}"
+          COLOR="good"
+
+          if [ "$STATUS" = "failure" ]; then
+            COLOR="danger"
+          elif [ "$STATUS" = "cancelled" ]; then
+            COLOR="warning"
+          fi
+
+          curl -X POST $SLACK_WEBHOOK_URL \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"attachments\": [{
+                \"color\": \"$COLOR\",
+                \"title\": \"Test Run #${{ github.run_number }} - $STATUS\",
+                \"text\": \"Branch: \`${{ github.ref_name }}\`\nTriggered by: @${{ github.actor }}\",
+                \"actions\": [{
+                  \"type\": \"button\",
+                  \"text\": \"View Allure Report\",
+                  \"url\": \"${{ env.ALLURE_SERVER_URL }}/allure-docker-service/projects/${{ env.ALLURE_PROJECT_ID }}/reports/latest/index.html\"
+                }]
+              }]
+            }"

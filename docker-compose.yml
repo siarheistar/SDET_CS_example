@@ -1,0 +1,74 @@
+services:
+  # Unit and API tests (no browser needed)
+  unit-api-tests:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: test-runtime
+    image: sdet-cs-framework:latest
+    container_name: sdet-unit-api-tests
+    command: >
+      dotnet test
+      --filter "TestCategory=Unit|TestCategory=API"
+      --logger:"console;verbosity=normal"
+      --logger:"trx;LogFileName=test-results.trx"
+      --results-directory:/app/test-reports
+    volumes:
+      - ./test-reports:/app/test-reports
+      - ./allure-results:/app/allure-results
+      - ./allureConfig.json:/app/allureConfig.json
+    environment:
+      - DOTNET_CLI_TELEMETRY_OPTOUT=1
+      - DOTNET_NOLOGO=true
+      - ALLURE_CONFIG=/app/allureConfig.json
+
+  # All tests (including UI - will fail without display but shows test execution)
+  all-tests:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: test-runtime
+    image: sdet-cs-framework:latest
+    container_name: sdet-all-tests
+    command: >
+      dotnet test
+      --logger:"console;verbosity=detailed"
+      --logger:"trx;LogFileName=test-results.trx"
+      --results-directory:/app/test-reports
+    volumes:
+      - ./test-reports:/app/test-reports
+      - ./allure-results:/app/allure-results
+      - ./logs:/app/logs
+    environment:
+      - DOTNET_CLI_TELEMETRY_OPTOUT=1
+      - DOTNET_NOLOGO=true
+
+  # Just build verification
+  build-only:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: build
+    image: sdet-cs-framework:build
+    container_name: sdet-build-verify
+    command: echo "Build completed successfully"
+
+  # Allure report server - просмотр отчётов в браузере
+  allure-server:
+    image: frankescobar/allure-docker-service:latest
+    container_name: sdet-allure-server
+    ports:
+      - "5050:5050"  # Allure UI
+      - "5252:5252"  # Allure API
+    volumes:
+      - ./allure-results:/app/allure-results
+      - ./allure-reports:/app/allure-reports
+    environment:
+      - CHECK_RESULTS_EVERY_SECONDS=3
+      - KEEP_HISTORY=1
+
+volumes:
+  test-reports:
+  allure-results:
+  allure-reports:
+  logs:
