@@ -143,21 +143,24 @@ jobs:
           find allure-report -type f | wc -l
 
       # =====================================================
-      # STEP 10: Deploy to GitHub Pages
+      # STEP 10: Upload Allure Report as Pages Artifact
+      # =====================================================
+      - name: Upload Pages artifact
+        if: always()
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./allure-report
+
+      # =====================================================
+      # STEP 11: Deploy to GitHub Pages
       # =====================================================
       - name: Deploy to GitHub Pages
         if: always()
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./allure-report
-          destination_dir: ./
-          keep_files: false
-          user_name: 'github-actions[bot]'
-          user_email: 'github-actions[bot]@users.noreply.github.com'
+        id: deployment
+        uses: actions/deploy-pages@v4
 
       # =====================================================
-      # STEP 11: Create Summary
+      # STEP 12: Create Summary
       # =====================================================
       - name: Create job summary
         if: always()
@@ -179,11 +182,11 @@ jobs:
           echo "> 📝 Note: It may take 1-2 minutes for GitHub Pages to update" >> $GITHUB_STEP_SUMMARY
 
       # =====================================================
-      # STEP 12: Upload Artifacts (Backup)
+      # STEP 13: Upload Test Results (Backup)
       # =====================================================
-      - name: Upload test artifacts
+      - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: test-results-${{ github.run_number }}
           path: |
