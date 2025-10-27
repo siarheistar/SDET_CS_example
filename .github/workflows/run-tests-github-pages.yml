@@ -77,12 +77,25 @@ jobs:
           echo "ALLURE_RESULTS_PATH set to: $ALLURE_RESULTS_PATH"
           dotnet test tests/SDET.Tests.csproj \
             --configuration Release \
-            --no-build \
             --filter "TestCategory=Unit" \
             --logger:"console;verbosity=normal" \
             --logger:"trx;LogFileName=test-results.trx" \
             --results-directory:${{ github.workspace }}/test-reports
         continue-on-error: true
+
+      - name: Verify Allure results were generated
+        if: always()
+        run: |
+          echo "Checking allure-results directory:"
+          ls -la ${{ github.workspace }}/allure-results/ || echo "Directory not found"
+          echo ""
+          echo "JSON result files count:"
+          find ${{ github.workspace }}/allure-results -name "*-result.json" | wc -l
+          echo ""
+          if [ -d "${{ github.workspace }}/allure-results" ]; then
+            echo "Files in allure-results:"
+            ls -la ${{ github.workspace }}/allure-results/
+          fi
 
       # =====================================================
       # STEP 6: Add Environment Info
