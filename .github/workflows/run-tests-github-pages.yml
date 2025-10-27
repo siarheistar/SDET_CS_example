@@ -163,7 +163,19 @@ jobs:
           find allure-report -type f | wc -l
 
       # =====================================================
-      # STEP 10: Upload Allure Report as Pages Artifact
+      # STEP 10: Upload Allure Report as Artifact
+      # =====================================================
+      - name: Upload Allure report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report
+          if-no-files-found: error
+          retention-days: 7
+
+      # =====================================================
+      # STEP 11: Upload Allure Report as Pages Artifact
       # =====================================================
       - name: Upload Pages artifact
         if: always()
@@ -172,7 +184,7 @@ jobs:
           path: ./allure-report
 
       # =====================================================
-      # STEP 11: Deploy to GitHub Pages
+      # STEP 12: Deploy to GitHub Pages
       # =====================================================
       - name: Deploy to GitHub Pages
         if: always()
@@ -180,7 +192,7 @@ jobs:
         uses: actions/deploy-pages@v4
 
       # =====================================================
-      # STEP 12: Create Summary
+      # STEP 13: Create Summary
       # =====================================================
       - name: Create job summary
         if: always()
@@ -202,7 +214,7 @@ jobs:
           echo "> 📝 Note: It may take 1-2 minutes for GitHub Pages to update" >> $GITHUB_STEP_SUMMARY
 
       # =====================================================
-      # STEP 13: Upload Test Results (Backup)
+      # STEP 14: Upload Test Results (Backup)
       # =====================================================
       - name: Upload test results
         if: always()
