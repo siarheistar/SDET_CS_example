@@ -46,7 +46,7 @@
     <PackageReference Include="NSubstitute" Version="5.1.0" />
 
     <!-- Allure Reporting -->
-    <PackageReference Include="Allure.NUnit" Version="2.12.1" />
+    <PackageReference Include="Allure.NUnit" Version="2.13.0" />
     <!-- Allure.SpecFlowPlugin removed - incompatible with .NET 8 -->
 
     <!-- Test Coverage -->
