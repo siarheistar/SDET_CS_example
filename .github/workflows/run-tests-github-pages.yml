@@ -73,10 +73,20 @@ jobs:
 
       - name: Run tests
         run: |
+          # Copy allureConfig.json to test output directory
+          cp ${{ github.workspace }}/allureConfig.json ${{ github.workspace }}/tests/bin/Release/net8.0/allureConfig.json
+
+          # Set environment variable
           export ALLURE_RESULTS_PATH=${{ github.workspace }}/allure-results
-          echo "ALLURE_RESULTS_PATH set to: $ALLURE_RESULTS_PATH"
+          export ALLURE_CONFIG=${{ github.workspace }}/tests/bin/Release/net8.0/allureConfig.json
+
+          echo "ALLURE_RESULTS_PATH: $ALLURE_RESULTS_PATH"
+          echo "ALLURE_CONFIG: $ALLURE_CONFIG"
+          echo "Config copied to: ${{ github.workspace }}/tests/bin/Release/net8.0/allureConfig.json"
+
           dotnet test tests/SDET.Tests.csproj \
             --configuration Release \
+            --no-build \
             --filter "TestCategory=Unit" \
             --logger:"console;verbosity=normal" \
             --logger:"trx;LogFileName=test-results.trx" \
