@@ -84,7 +84,32 @@ jobs:
           ALLURE_CONFIG: ${{ github.workspace }}/allureConfig.json
 
       # =====================================================
-      # STEP 7: Add Allure Environment Info
+      # STEP 7: Install Allure CLI
+      # =====================================================
+      - name: Install Allure CLI
+        if: always()
+        run: |
+          sudo wget https://github.com/allure-framework/allure2/releases/download/2.25.0/allure-2.25.0.tgz
+          sudo tar -zxvf allure-2.25.0.tgz -C /opt/
+          sudo ln -s /opt/allure-2.25.0/bin/allure /usr/bin/allure
+          allure --version
+
+      # =====================================================
+      # STEP 8: Convert TRX to Allure Results
+      # =====================================================
+      - name: Convert TRX to Allure format
+        if: always()
+        run: |
+          echo "📦 Converting TRX files to Allure format..."
+
+          # Copy TRX files to allure-results for Allure 2.x native TRX support
+          find ${{ github.workspace }}/test-reports -name "*.trx" -exec cp {} ${{ github.workspace }}/allure-results/ \;
+
+          echo "✅ TRX files ready for Allure processing"
+          ls -la ${{ github.workspace }}/allure-results/
+
+      # =====================================================
+      # STEP 9: Add Allure Environment Info
       # =====================================================
       - name: Add Allure environment information
         if: always()
@@ -153,7 +178,7 @@ jobs:
           cd ${{ github.workspace }}/allure-results
 
           UPLOAD_COUNT=0
-          for file in *.json *.properties; do
+          for file in *.json *.properties *.trx; do
             if [ -f "$file" ]; then
               echo "  Uploading: $file"
               curl -X POST "$ALLURE_SERVER/allure-docker-service/send-results?project_id=$PROJECT_ID" \
