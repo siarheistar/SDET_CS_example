@@ -142,13 +142,19 @@ jobs:
           fi
 
       # =====================================================
-      # STEP 8: Generate Allure Report
+      # STEP 8: Generate Allure Report from TRX
       # =====================================================
-      - name: Generate Allure report
+      - name: Generate Allure report from TRX files
         if: always()
         run: |
-          allure generate --clean ${{ github.workspace }}/allure-results -o allure-report
-          echo "✅ Report generated"
+          echo "📊 Generating Allure report from TRX files..."
+          echo "TRX files location:"
+          ls -la ${{ github.workspace }}/test-reports/
+
+          # Allure 2.x has native TRX support - point it to test-reports directory
+          allure generate --clean ${{ github.workspace }}/test-reports -o allure-report
+
+          echo "✅ Report generated from TRX"
 
       # =====================================================
       # STEP 9: Verify Allure Report
