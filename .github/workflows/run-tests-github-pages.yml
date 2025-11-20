@@ -71,24 +71,104 @@ jobs:
           ls -la ${{ github.workspace }}/allureConfig.json || echo "Config file not found"
           cat ${{ github.workspace }}/allureConfig.json || echo "Cannot read config"
 
-      - name: Run tests
+      # =====================================================
+      # STEP 5a: Start API Server
+      # =====================================================
+      - name: Start API Server
         run: |
-          # Set Allure environment variables (AllureConfig.cs reads these)
+          echo "Starting API server on localhost:5001..."
+          cd src/Application
+          dotnet run --configuration Release --urls "http://localhost:5001" > api-server.log 2>&1 &
+          API_PID=$!
+          echo "API_PID=$API_PID" >> $GITHUB_ENV
+
+          # Wait for server to start (max 30 seconds)
+          for i in {1..30}; do
+            if curl -s http://localhost:5001/health > /dev/null 2>&1; then
+              echo "✅ API server is ready!"
+              break
+            fi
+            echo "Waiting for API server... ($i/30)"
+            sleep 1
+          done
+
+          # Verify server is running
+          if ! curl -s http://localhost:5001/health > /dev/null 2>&1; then
+            echo "❌ API server failed to start"
+            cat api-server.log
+            exit 1
+          fi
+
+      # =====================================================
+      # STEP 5b: Run Unit Tests
+      # =====================================================
+      - name: Run Unit Tests
+        run: |
           export ALLURE_RESULTS_DIRECTORY=${{ github.workspace }}/allure-results
           export ALLURE_RESULTS_PATH=${{ github.workspace }}/allure-results
-
-          echo "ALLURE_RESULTS_DIRECTORY: $ALLURE_RESULTS_DIRECTORY"
-          echo "ALLURE_RESULTS_PATH: $ALLURE_RESULTS_PATH"
 
           dotnet test tests/SDET.Tests.csproj \
             --configuration Release \
             --filter "TestCategory=Unit" \
             --logger:"console;verbosity=normal" \
-            --logger:"trx;LogFileName=test-results.trx" \
+            --logger:"trx;LogFileName=unit-test-results.trx" \
             --results-directory:${{ github.workspace }}/test-reports
         continue-on-error: true
         env:
           ALLURE_RESULTS_DIRECTORY: ${{ github.workspace }}/allure-results
+
+      # =====================================================
+      # STEP 5c: Run API Tests
+      # =====================================================
+      - name: Run API Tests
+        run: |
+          export ALLURE_RESULTS_DIRECTORY=${{ github.workspace }}/allure-results
+          export ALLURE_RESULTS_PATH=${{ github.workspace }}/allure-results
+
+          dotnet test tests/SDET.Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --filter "TestCategory=API" \
+            --logger:"console;verbosity=normal" \
+            --logger:"trx;LogFileName=api-test-results.trx" \
+            --results-directory:${{ github.workspace }}/test-reports
+        continue-on-error: true
+        env:
+          ALLURE_RESULTS_DIRECTORY: ${{ github.workspace }}/allure-results
+
+      # =====================================================
+      # STEP 5d: Setup Node.js for Newman
+      # =====================================================
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Newman
+        run: npm install -g newman newman-reporter-htmlextra
+
+      # =====================================================
+      # STEP 5e: Run Newman/Postman Tests
+      # =====================================================
+      - name: Run Newman/Postman Tests
+        run: |
+          mkdir -p postman-reports
+          newman run postman/collections/SDET_API_Tests.postman_collection.json \
+            --environment postman/environments/local.postman_environment.json \
+            --reporters cli,htmlextra \
+            --reporter-htmlextra-export postman-reports/newman-report.html
+        continue-on-error: true
+
+      # =====================================================
+      # STEP 5f: Stop API Server
+      # =====================================================
+      - name: Stop API Server
+        if: always()
+        run: |
+          if [ ! -z "${{ env.API_PID }}" ]; then
+            echo "Stopping API server (PID: ${{ env.API_PID }})"
+            kill ${{ env.API_PID }} 2>/dev/null || true
+          fi
 
       - name: Verify Allure results were generated
         if: always()
@@ -213,9 +293,20 @@ jobs:
           echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📊 Report" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Test Suites Executed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ **Unit Tests** - NUnit tests with Allure reporting" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ **API Tests** - NUnit API integration tests" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ **Newman/Postman Tests** - Postman collection tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Reports" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "🔗 [**View Allure Report on GitHub Pages**]($PAGES_URL)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📦 **Artifacts Available:**" >> $GITHUB_STEP_SUMMARY
+          echo "- \`allure-report\` - Complete Allure test report" >> $GITHUB_STEP_SUMMARY
+          echo "- \`newman-postman-report-${{ github.run_number }}\` - Newman HTML report" >> $GITHUB_STEP_SUMMARY
+          echo "- \`test-results-${{ github.run_number }}\` - Raw test results (TRX + Allure JSON)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "> 📝 Note: It may take 1-2 minutes for GitHub Pages to update" >> $GITHUB_STEP_SUMMARY
 
@@ -230,4 +321,15 @@ jobs:
           path: |
             ${{ github.workspace }}/test-reports/
             ${{ github.workspace }}/allure-results/
+          retention-days: 30
+
+      # =====================================================
+      # STEP 15: Upload Newman/Postman HTML Report
+      # =====================================================
+      - name: Upload Newman/Postman Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: newman-postman-report-${{ github.run_number }}
+          path: postman-reports/
           retention-days: 30
