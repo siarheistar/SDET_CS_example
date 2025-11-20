@@ -39,7 +39,7 @@ public class AllureReportAttribute : Attribute, ITestAction
             status = Status.none
         };
 
-        Allure.StartTestCase(_testResultUuid, testResult);
+        Allure.StartTestCase(testResult);
     }
 
     public void AfterTest(ITest test)
@@ -53,7 +53,7 @@ public class AllureReportAttribute : Attribute, ITestAction
             _ => Status.broken
         };
 
-        Allure.UpdateTestCase(_testResultUuid, tr =>
+        Allure.UpdateTestCase(tr =>
         {
             tr.status = status;
             tr.statusDetails = new StatusDetails
@@ -63,7 +63,7 @@ public class AllureReportAttribute : Attribute, ITestAction
             };
         });
 
-        Allure.StopTestCase(_testResultUuid);
-        Allure.WriteTestCase(_testResultUuid);
+        Allure.StopTestCase();
+        Allure.WriteTestCase();
     }
 }

@@ -185,7 +185,7 @@ public class UserRegistrationSteps
         if (tabIndex != null)
         {
             int.TryParse(tabIndex, out var index).Should().BeTrue();
-            index.Should().BeGreaterOrEqualTo(0, "Tab index should be non-negative");
+            index.Should().BeGreaterThanOrEqualTo(0, "Tab index should be non-negative");
         }
     }
 
