@@ -145,7 +145,7 @@ jobs:
           node-version: '20'
 
       - name: Install Newman
-        run: npm install -g newman newman-reporter-htmlextra
+        run: npm install -g newman newman-reporter-htmlextra newman-reporter-allure
 
       # =====================================================
       # STEP 5e: Run Newman/Postman Tests
@@ -153,10 +153,13 @@ jobs:
       - name: Run Newman/Postman Tests
         run: |
           mkdir -p postman-reports
+          mkdir -p ${{ github.workspace }}/allure-results/newman
+
           newman run postman/collections/SDET_API_Tests.postman_collection.json \
             --environment postman/environments/local.postman_environment.json \
-            --reporters cli,htmlextra \
-            --reporter-htmlextra-export postman-reports/newman-report.html
+            --reporters cli,htmlextra,allure \
+            --reporter-htmlextra-export postman-reports/newman-report.html \
+            --reporter-allure-export ${{ github.workspace }}/allure-results
         continue-on-error: true
 
       # =====================================================
@@ -224,17 +227,29 @@ jobs:
       # =====================================================
       # STEP 8: Generate Allure Report from TRX
       # =====================================================
-      - name: Generate Allure report from TRX files
+      - name: Generate Allure report from TRX and Allure results
         if: always()
         run: |
-          echo "📊 Generating Allure report from TRX files..."
+          echo "📊 Generating Allure report..."
           echo "TRX files location:"
           ls -la ${{ github.workspace }}/test-reports/
+          echo ""
+          echo "Allure results:"
+          ls -la ${{ github.workspace }}/allure-results/ || echo "No allure results"
 
-          # Allure 2.x has native TRX support - point it to test-reports directory
-          allure generate --clean ${{ github.workspace }}/test-reports -o allure-report
+          # Generate Allure report from both TRX files and Allure JSON results
+          allure generate --clean \
+            ${{ github.workspace }}/test-reports \
+            ${{ github.workspace }}/allure-results \
+            -o allure-report
 
-          echo "✅ Report generated from TRX"
+          echo "✅ Report generated"
+
+          # Copy Newman HTML report into Allure report for easy access
+          if [ -f "postman-reports/newman-report.html" ]; then
+            cp postman-reports/newman-report.html allure-report/newman-report.html
+            echo "✅ Newman HTML report added to Allure report directory"
+          fi
 
       # =====================================================
       # STEP 9: Verify Allure Report
@@ -303,9 +318,11 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "🔗 [**View Allure Report on GitHub Pages**]($PAGES_URL)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 [**View Newman/Postman HTML Report**]($PAGES_URL/newman-report.html)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "📦 **Artifacts Available:**" >> $GITHUB_STEP_SUMMARY
-          echo "- \`allure-report\` - Complete Allure test report" >> $GITHUB_STEP_SUMMARY
-          echo "- \`newman-postman-report-${{ github.run_number }}\` - Newman HTML report" >> $GITHUB_STEP_SUMMARY
+          echo "- \`allure-report\` - Complete Allure test report (includes Newman results)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`newman-postman-report-${{ github.run_number }}\` - Newman HTML report (also in GitHub Pages)" >> $GITHUB_STEP_SUMMARY
           echo "- \`test-results-${{ github.run_number }}\` - Raw test results (TRX + Allure JSON)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "> 📝 Note: It may take 1-2 minutes for GitHub Pages to update" >> $GITHUB_STEP_SUMMARY
