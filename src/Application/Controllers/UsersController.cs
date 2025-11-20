@@ -58,7 +58,8 @@ public class UsersController : ControllerBase
             id = user.Id,
             username = user.Username,
             email = user.Email,
-            createdAt = user.CreatedAt
+            createdAt = user.CreatedAt,
+            message = "User registered successfully"
         });
     }
 
@@ -85,7 +86,13 @@ public class UsersController : ControllerBase
             id = user.Id,
             username = user.Username,
             email = user.Email,
-            token = "mock-jwt-token"
+            token = "mock-jwt-token",
+            user = new
+            {
+                id = user.Id,
+                username = user.Username,
+                email = user.Email
+            }
         });
     }
 

@@ -276,29 +276,67 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install Newman
-        run: npm install -g newman newman-reporter-htmlextra newman-reporter-allure
+      - name: Restore dependencies
+        run: dotnet restore
 
-      - name: Start Application
-        run: |
-          # Start application in background
-          # docker-compose up -d
-          echo "Application would be started here"
+      - name: Build solution
+        run: dotnet build --configuration ${{ env.CONFIGURATION }} --no-restore
 
-      - name: Run Postman Collection
+      - name: Install Newman and reporters
+        run: npm install -g newman newman-reporter-htmlextra
+
+      - name: Start API Server
         run: |
+          echo "Starting API server on localhost:5001..."
+          cd src/Application
+          dotnet run --configuration ${{ env.CONFIGURATION }} --urls "http://localhost:5001" > api-server.log 2>&1 &
+          API_PID=$!
+          echo "API_PID=$API_PID" >> $GITHUB_ENV
+
+          # Wait for server to start (max 30 seconds)
+          for i in {1..30}; do
+            if curl -s http://localhost:5001/health > /dev/null 2>&1; then
+              echo "✅ API server is ready!"
+              break
+            fi
+            echo "Waiting for API server... ($i/30)"
+            sleep 1
+          done
+
+          # Verify server is running
+          if ! curl -s http://localhost:5001/health > /dev/null 2>&1; then
+            echo "❌ API server failed to start"
+            cat api-server.log
+            exit 1
+          fi
+
+      - name: Run Newman/Postman Tests
+        run: |
+          mkdir -p postman-reports
           newman run postman/collections/SDET_API_Tests.postman_collection.json \
             --environment postman/environments/local.postman_environment.json \
-            --reporters cli,htmlextra,allure \
-            --reporter-htmlextra-export postman-reports/report.html \
-            --reporter-allure-export allure-results
+            --reporters cli,htmlextra \
+            --reporter-htmlextra-export postman-reports/report.html
 
-      - name: Upload Postman Results
+      - name: Stop API Server
+        if: always()
+        run: |
+          if [ ! -z "${{ env.API_PID }}" ]; then
+            echo "Stopping API server (PID: ${{ env.API_PID }})"
+            kill ${{ env.API_PID }} 2>/dev/null || true
+          fi
+
+      - name: Upload Postman HTML Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
