@@ -35,8 +35,8 @@ namespace SDET.Tests.Bdd.Features
         public virtual void FeatureSetup()
         {
             testRunner = TechTalk.SpecFlow.TestRunnerManager.GetTestRunner();
-            TechTalk.SpecFlow.FeatureInfo featureInfo = new TechTalk.SpecFlow.FeatureInfo(new System.Globalization.CultureInfo("en-US"), "Bdd/Features", "User Registration API", "    As an API client\n    I want to register users via the API\n    So that I can i" +
-                    "ntegrate user registration into other applications", ProgrammingLanguage.CSharp, featureTags);
+            TechTalk.SpecFlow.FeatureInfo featureInfo = new TechTalk.SpecFlow.FeatureInfo(new System.Globalization.CultureInfo("en-US"), "Bdd/Features", "User Registration API", "    As an API client\r\n    I want to register users via the API\r\n    So that I can" +
+                    " integrate user registration into other applications", ProgrammingLanguage.CSharp, featureTags);
             testRunner.OnFeatureStart(featureInfo);
         }
         

@@ -19,7 +19,9 @@ namespace SDET.Tests.Base;
 [Category("API")]
 public abstract class BaseAPITest : BaseTest, IAPITest
 {
+#pragma warning disable NUnit1032 // The field _apiClient is disposed in OneTimeTearDown
     private RestClient? _apiClient;
+#pragma warning restore NUnit1032
 
     /// <summary>
     /// Gets the REST API client
@@ -42,6 +44,25 @@ public abstract class BaseAPITest : BaseTest, IAPITest
     }
 
     /// <summary>
+    /// Extension point for test-level teardown
+    /// </summary>
+    protected override void OnTestTearDown()
+    {
+        base.OnTestTearDown();
+        // Note: ApiClient disposal happens in fixture teardown
+    }
+
+    /// <summary>
+    /// Extension point for fixture-level teardown
+    /// </summary>
+    [OneTimeTearDown]
+    public void DisposeApiClient()
+    {
+        _apiClient?.Dispose();
+        _apiClient = null;
+    }
+
+    /// <summary>
     /// Extension point for test-level setup
     /// </summary>
     protected override void OnTestSetUp()
@@ -58,7 +79,7 @@ public abstract class BaseAPITest : BaseTest, IAPITest
         var options = new RestClientOptions(BaseUrl)
         {
             ThrowOnAnyError = false,
-            MaxTimeout = TestConfiguration.ApiTimeout
+            Timeout = TimeSpan.FromMilliseconds(TestConfiguration.ApiTimeout)
         };
 
         _apiClient = new RestClient(options);
@@ -262,6 +283,8 @@ public abstract class BaseAPITest : BaseTest, IAPITest
             Logger.Error($"  ← Error: {response.ErrorMessage}");
         }
     }
+
+
 }
 
 /// <summary>

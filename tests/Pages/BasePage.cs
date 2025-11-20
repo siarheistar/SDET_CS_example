@@ -96,6 +96,8 @@ public abstract class BasePage : IPageObject
             Timeout = timeout
         });
 
+        await Task.CompletedTask; // Satisfy async requirement
+
         Logger.Debug("Page load state: NetworkIdle");
     }
 

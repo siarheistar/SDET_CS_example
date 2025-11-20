@@ -35,8 +35,8 @@ namespace SDET.Tests.Bdd.Features
         public virtual void FeatureSetup()
         {
             testRunner = TechTalk.SpecFlow.TestRunnerManager.GetTestRunner();
-            TechTalk.SpecFlow.FeatureInfo featureInfo = new TechTalk.SpecFlow.FeatureInfo(new System.Globalization.CultureInfo("en-US"), "Bdd/Features", "Order Management", "    As a user\n    I want to create and manage orders\n    So that I can purchase p" +
-                    "roducts from the application", ProgrammingLanguage.CSharp, featureTags);
+            TechTalk.SpecFlow.FeatureInfo featureInfo = new TechTalk.SpecFlow.FeatureInfo(new System.Globalization.CultureInfo("en-US"), "Bdd/Features", "Order Management", "    As a user\r\n    I want to create and manage orders\r\n    So that I can purchase" +
+                    " products from the application", ProgrammingLanguage.CSharp, featureTags);
             testRunner.OnFeatureStart(featureInfo);
         }
         

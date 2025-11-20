@@ -121,12 +121,30 @@ jobs:
       - name: Build solution
         run: dotnet build --configuration ${{ env.CONFIGURATION }} --no-restore
 
-      - name: Start Application (if needed)
+      - name: Start API Server
         run: |
-          # Start application in background if it's not a separate service
-          # dotnet run --project src/Application/SDET.Application.csproj &
-          # sleep 10
-          echo "Application would be started here"
+          echo "Starting API server on localhost:5001..."
+          cd src/Application
+          dotnet run --configuration ${{ env.CONFIGURATION }} --urls "http://localhost:5001" > api-server.log 2>&1 &
+          API_PID=$!
+          echo "API_PID=$API_PID" >> $GITHUB_ENV
+
+          # Wait for server to start (max 30 seconds)
+          for i in {1..30}; do
+            if curl -s http://localhost:5001/api/Test/health > /dev/null 2>&1; then
+              echo "✅ API server is ready!"
+              break
+            fi
+            echo "Waiting for API server... ($i/30)"
+            sleep 1
+          done
+
+          # Verify server is running
+          if ! curl -s http://localhost:5001/api/Test/health > /dev/null 2>&1; then
+            echo "❌ API server failed to start"
+            cat api-server.log
+            exit 1
+          fi
 
       - name: Run API Tests
         run: |
@@ -138,6 +156,14 @@ jobs:
             --logger "console;verbosity=detailed" \
             --results-directory ./test-reports \
             --collect:"XPlat Code Coverage"
+
+      - name: Stop API Server
+        if: always()
+        run: |
+          if [ ! -z "${{ env.API_PID }}" ]; then
+            echo "Stopping API server (PID: ${{ env.API_PID }})"
+            kill ${{ env.API_PID }} 2>/dev/null || true
+          fi
 
       - name: Upload Test Results
         if: always()
