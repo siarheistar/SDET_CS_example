@@ -175,7 +175,7 @@ jobs:
   # ==================== UI Tests Job ====================
   ui-tests:
     name: UI Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # Use Ubuntu 22.04 for Playwright compatibility
     needs: code-quality
 
     steps:
@@ -226,7 +226,7 @@ jobs:
   # ==================== BDD Tests Job ====================
   bdd-tests:
     name: BDD/SpecFlow Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # Use Ubuntu 22.04 for Playwright compatibility
     needs: code-quality
 
     steps:
@@ -308,7 +308,7 @@ jobs:
   # ==================== Smoke Tests Job ====================
   smoke-tests:
     name: Smoke Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # Use Ubuntu 22.04 for Playwright compatibility
     needs: code-quality
     if: github.event_name == 'pull_request' || github.event.inputs.test_suite == 'smoke'
 
