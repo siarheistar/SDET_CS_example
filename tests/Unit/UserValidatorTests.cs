@@ -91,14 +91,14 @@ public class UserValidatorTests
             return false;
 
         var atIndex = email.IndexOf("@");
-        var dotIndex = email.LastIndexOf(".");
+        if (atIndex <= 0 || atIndex >= email.Length - 1)
+            return false;
 
-        // Must have @ and . in correct positions
-        // @ must not be first or last character
-        // . must come after @ and not be the last character
-        return atIndex > 0
-            && atIndex < email.Length - 1
-            && dotIndex > atIndex
-            && dotIndex < email.Length - 1;
+        // Get the part after @ to check for dot
+        var domainPart = email.Substring(atIndex + 1);
+        var dotIndex = domainPart.IndexOf(".");
+
+        // Domain must have at least one dot, not at the beginning or end
+        return dotIndex > 0 && dotIndex < domainPart.Length - 1;
     }
 }
