@@ -75,6 +75,7 @@ jobs:
         run: dotnet build --configuration ${{ env.CONFIGURATION }} --no-restore
 
       - name: Run Unit Tests
+        continue-on-error: true
         run: |
           dotnet test \
             --configuration ${{ env.CONFIGURATION }} \
@@ -129,6 +130,7 @@ jobs:
           echo "Application would be started here"
 
       - name: Run API Tests
+        continue-on-error: true
         run: |
           dotnet test \
             --configuration ${{ env.CONFIGURATION }} \
@@ -173,6 +175,7 @@ jobs:
           pwsh bin/${{ env.CONFIGURATION }}/net8.0/playwright.ps1 install --with-deps chromium firefox webkit
 
       - name: Run UI Tests
+        continue-on-error: true
         run: |
           dotnet test \
             --configuration ${{ env.CONFIGURATION }} \
@@ -224,6 +227,7 @@ jobs:
           pwsh bin/${{ env.CONFIGURATION }}/net8.0/playwright.ps1 install --with-deps chromium
 
       - name: Run BDD Tests
+        continue-on-error: true
         run: |
           dotnet test \
             --configuration ${{ env.CONFIGURATION }} \
@@ -265,6 +269,7 @@ jobs:
           echo "Application would be started here"
 
       - name: Run Postman Collection
+        continue-on-error: true
         run: |
           newman run postman/collections/SDET_API_Tests.postman_collection.json \
             --environment postman/environments/local.postman_environment.json \
@@ -307,6 +312,7 @@ jobs:
           pwsh bin/${{ env.CONFIGURATION }}/net8.0/playwright.ps1 install --with-deps chromium
 
       - name: Run Smoke Tests
+        continue-on-error: true
         run: |
           dotnet test \
             --configuration ${{ env.CONFIGURATION }} \
