@@ -2,7 +2,7 @@ name: Test Automation CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop, feature/* ]
+    branches: [ main, develop, feat/* ]
   pull_request:
     branches: [ main, develop ]
   schedule:
